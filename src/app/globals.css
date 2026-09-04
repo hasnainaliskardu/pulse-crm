@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 30 20% 98%;
+    --foreground: 12 6% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 12 6% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 12 6% 11%;
+    --primary: 24 94% 41%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 30 10% 94%;
+    --secondary-foreground: 12 6% 11%;
+    --muted: 30 10% 94%;
+    --muted-foreground: 25 5% 45%;
+    --accent: 24 60% 94%;
+    --accent-foreground: 24 94% 41%;
+    --destructive: 0 72% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 20 6% 90%;
+    --input: 20 6% 88%;
+    --ring: 24 94% 41%;
+    --radius: 0.75rem;
+    --success: 142 72% 36%;
+    --info: 199 89% 48%;
+    --warning: 32 95% 44%;
+    --chart-1: 24 94% 41%;
+    --chart-2: 142 72% 36%;
+    --chart-3: 199 89% 48%;
+    --chart-4: 271 81% 56%;
+    --chart-5: 48 96% 53%;
+  }
+
+  .dark {
+    --background: 12 6% 9%;
+    --foreground: 30 20% 96%;
+    --card: 12 6% 14%;
+    --card-foreground: 30 20% 96%;
+    --popover: 12 6% 13%;
+    --popover-foreground: 30 20% 96%;
+    --primary: 24 94% 55%;
+    --primary-foreground: 12 6% 9%;
+    --secondary: 12 6% 20%;
+    --secondary-foreground: 30 20% 96%;
+    --muted: 12 6% 20%;
+    --muted-foreground: 25 10% 65%;
+    --accent: 24 40% 20%;
+    --accent-foreground: 24 94% 65%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 12 6% 22%;
+    --input: 12 6% 24%;
+    --ring: 24 94% 55%;
+    --success: 142 69% 45%;
+    --info: 199 89% 55%;
+    --warning: 32 95% 52%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+.card-warm {
+  box-shadow: 0 1px 3px 0 hsl(24 30% 40% / 0.06), 0 4px 12px -2px hsl(24 30% 40% / 0.08);
+}
+
+::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
