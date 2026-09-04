@@ -15,11 +15,22 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
   if (!member) notFound();
 
   const from14 = new Date(Date.now() - 13 * 864e5).toISOString().slice(0, 10);
-  const [stats, workload, activity] = await Promise.all([
+  const from30 = new Date(Date.now() - 29 * 864e5).toISOString().slice(0, 10);
+  const [stats, workload, activity, memberTouches] = await Promise.all([
     supabase.from("daily_stats").select("*").eq("member_id", params.id).gte("date", from14).order("date"),
     supabase.from("leads").select("id, status", { count: "exact" }).eq("assigned_to", params.id),
     supabase.from("activity_log").select("id, action, entity, entity_id, member_id, detail, created_at").eq("member_id", params.id).order("created_at", { ascending: false }).limit(15),
+    supabase.from("touches").select("id, channel, direction, outcome, occurred_at").eq("member_id", params.id).gte("occurred_at", `${from30}T00:00:00.000Z`),
   ]);
+
+  const mt = memberTouches.data ?? [];
+  const perf = {
+    calls: mt.filter((t) => t.channel === "CALL").length,
+    emails: mt.filter((t) => t.channel === "EMAIL").length,
+    interested: mt.filter((t) => t.outcome === "INTERESTED").length,
+    rejected: mt.filter((t) => t.outcome === "REJECTED").length,
+    meetings: mt.filter((t) => t.outcome === "MEETING_BOOKED").length,
+  };
 
   return (
     <MemberDetailClient
@@ -27,6 +38,7 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
       stats={stats.data ?? []}
       workloadCount={workload.count ?? 0}
       activity={activity.data ?? []}
+      perf={perf}
     />
   );
 }

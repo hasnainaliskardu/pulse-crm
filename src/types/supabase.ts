@@ -53,6 +53,9 @@ export type MemberInsert = {
   daily_touch_target?: number;
   points?: number;
   created_at?: string;
+  workspaces?: Workspace[];
+  joining_date?: string | null;
+  salary_monthly?: number;
 }
 export type MemberUpdate = {
   full_name?: string;
@@ -63,6 +66,9 @@ export type MemberUpdate = {
   daily_research_target?: number;
   daily_touch_target?: number;
   points?: number;
+  workspaces?: Workspace[];
+  joining_date?: string | null;
+  salary_monthly?: number;
 }
 
 export type LeadRow = {

@@ -12,11 +12,13 @@ export default function MemberDetailClient({
   stats,
   workloadCount,
   activity,
+  perf,
 }: {
   member: MemberRow;
   stats: DailyStatRow[];
   workloadCount: number;
   activity: ActivityLogRow[];
+  perf: { calls: number; emails: number; interested: number; rejected: number; meetings: number };
 }) {
   const lvl = levelOf(member.points);
   const days: Array<{ date: string; hit: boolean; touches: number }> = [];
@@ -46,21 +48,32 @@ export default function MemberDetailClient({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="rounded-xl border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Calls (30d)</p>
+          <p className="text-2xl font-bold tabular-nums">{perf.calls}</p>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Emails (30d)</p>
+          <p className="text-2xl font-bold tabular-nums">{perf.emails}</p>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Interested</p>
+          <p className="text-2xl font-bold tabular-nums text-success">{perf.interested}</p>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Meetings</p>
+          <p className="text-2xl font-bold tabular-nums text-primary">{perf.meetings}</p>
+        </div>
         <div className="rounded-xl border bg-card p-4">
           <p className="text-xs text-muted-foreground">Current workload</p>
           <p className="text-2xl font-bold tabular-nums">{workloadCount}</p>
           <p className="text-[11px] text-muted-foreground">assigned leads</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs text-muted-foreground">Targets hit (14d)</p>
-          <p className="text-2xl font-bold tabular-nums">{hits}/14</p>
-          <p className="text-[11px] text-muted-foreground">daily touch target {member.daily_touch_target}</p>
-        </div>
-        <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs text-muted-foreground">Daily targets</p>
-          <p className="text-2xl font-bold tabular-nums">{member.daily_research_target}/{member.daily_touch_target}</p>
-          <p className="text-[11px] text-muted-foreground">research / touches</p>
+          <p className="text-xs text-muted-foreground">Joined</p>
+          <p className="text-2xl font-bold">{member.joining_date ? member.joining_date.slice(5) : "—"}</p>
+          <p className="text-[11px] text-muted-foreground">{member.is_active ? "Active" : "Deactivated"}</p>
         </div>
       </div>
 

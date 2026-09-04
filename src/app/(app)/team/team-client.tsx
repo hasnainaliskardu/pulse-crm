@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { SimpleSelect } from "@/components/ui/simple-select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { initials, levelOf, POSITIONS } from "@/lib/utils";
+import { initials, levelOf, TEAM_POSITIONS } from "@/lib/utils";
 import type { MemberRow } from "@/types/supabase";
 
 export default function TeamClient({ members }: { members: MemberRow[] }) {
@@ -21,10 +21,14 @@ export default function TeamClient({ members }: { members: MemberRow[] }) {
   // create form
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [position, setPosition] = useState("Researcher");
+  const [position, setPosition] = useState("Sales Team");
   const [password, setPassword] = useState("");
   const [researchTarget, setResearchTarget] = useState("40");
   const [touchTarget, setTouchTarget] = useState("45");
+  const [wsIntl, setWsIntl] = useState(false);
+  const [wsCalls, setWsCalls] = useState(true);
+  const [joiningDate, setJoiningDate] = useState(new Date().toISOString().slice(0, 10));
+  const [salaryMonthly, setSalaryMonthly] = useState("0");
 
   // reset password dialog
   const [resetFor, setResetFor] = useState<MemberRow | null>(null);
@@ -43,6 +47,10 @@ export default function TeamClient({ members }: { members: MemberRow[] }) {
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
+    if (!wsIntl && !wsCalls) {
+      toast.error("Select at least one workspace");
+      return;
+    }
     setBusy(true);
     try {
       await call({
@@ -53,10 +61,13 @@ export default function TeamClient({ members }: { members: MemberRow[] }) {
         password,
         dailyResearchTarget: Number(researchTarget),
         dailyTouchTarget: Number(touchTarget),
+        workspaces: [...(wsIntl ? ["INTL"] : []), ...(wsCalls ? ["CALLS"] : [])],
+        joiningDate,
+        salaryMonthly: Number(salaryMonthly) || 0,
       });
       toast.success(`Member created: ${fullName}`);
       setCreateOpen(false);
-      setFullName(""); setEmail(""); setPassword(""); setPosition("Researcher");
+      setFullName(""); setEmail(""); setPassword(""); setPosition("Sales Team"); setSalaryMonthly("0");
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed");
@@ -121,7 +132,17 @@ export default function TeamClient({ members }: { members: MemberRow[] }) {
                   <Badge variant="secondary">L{lvl.level} {lvl.name}</Badge>
                   {!m.is_active && <Badge variant="destructive">Deactivated</Badge>}
                 </div>
-                <p className="truncate text-xs text-muted-foreground">{m.email} · {m.position} · {m.points} pts · targets {m.daily_research_target}/{m.daily_touch_target}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {m.email} · {m.position} · {m.points} pts
+                  {m.joining_date ? ` · joined ${m.joining_date}` : ""}
+                </p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {(m.workspaces ?? ["INTL"]).map((w) => (
+                    <span key={w} className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                      {w === "INTL" ? "Intl Outreach" : "Cold Calling"}
+                    </span>
+                  ))}
+                </div>
               </div>
               {m.role !== "FOUNDER" && (
                 <div className="flex gap-2">
@@ -148,8 +169,31 @@ export default function TeamClient({ members }: { members: MemberRow[] }) {
           <form onSubmit={create} className="space-y-3">
             <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" required minLength={2} />
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required />
-            <SimpleSelect ariaLabel="Position" value={position} onChange={setPosition} options={POSITIONS.map((p) => ({ label: p, value: p }))} />
+            <SimpleSelect ariaLabel="Position" value={position} onChange={setPosition} options={TEAM_POSITIONS.map((p) => ({ label: p, value: p }))} />
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password (min 8 chars)" required minLength={8} />
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Workspaces (what this member can access)</p>
+              <div className="flex gap-3">
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input type="checkbox" checked={wsIntl} onChange={(e) => setWsIntl(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+                  International Outreach
+                </label>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input type="checkbox" checked={wsCalls} onChange={(e) => setWsCalls(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+                  Cold Calling
+                </label>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Joining date</label>
+                <Input type="date" value={joiningDate} onChange={(e) => setJoiningDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Monthly salary (USD)</label>
+                <Input type="number" value={salaryMonthly} onChange={(e) => setSalaryMonthly(e.target.value)} min={0} />
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="mb-1 block text-xs text-muted-foreground">Daily research target</label>

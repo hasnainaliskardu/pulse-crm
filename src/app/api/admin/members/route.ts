@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { createMember, updateMember, resetMemberPassword } from "@/lib/actions/members";
+import type { Workspace } from "@/types/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,9 @@ export async function POST(request: Request) {
         password: body.password,
         dailyResearchTarget: Number(body.dailyResearchTarget) || 40,
         dailyTouchTarget: Number(body.dailyTouchTarget) || 45,
+        workspaces: Array.isArray(body.workspaces) && body.workspaces.length ? body.workspaces : ["INTL"],
+        joiningDate: body.joiningDate || null,
+        salaryMonthly: Number(body.salaryMonthly) || 0,
       });
       if ("error" in res && res.error) return NextResponse.json(res, { status: 400 });
       return NextResponse.json({ ok: true });
@@ -33,6 +37,9 @@ export async function POST(request: Request) {
         is_active: body.isActive,
         daily_research_target: body.dailyResearchTarget !== undefined ? Number(body.dailyResearchTarget) : undefined,
         daily_touch_target: body.dailyTouchTarget !== undefined ? Number(body.dailyTouchTarget) : undefined,
+        workspaces: Array.isArray(body.workspaces) ? (body.workspaces as Workspace[]) : undefined,
+        joining_date: body.joiningDate !== undefined ? (body.joiningDate || null) : undefined,
+        salary_monthly: body.salaryMonthly !== undefined ? Number(body.salaryMonthly) : undefined,
       });
       if ("error" in res && res.error) return NextResponse.json(res, { status: 400 });
       return NextResponse.json({ ok: true });

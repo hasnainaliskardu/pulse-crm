@@ -18,7 +18,8 @@ type Action =
   | { action: "bulkImport"; rows: LeadInput[]; mode: "skip" | "allow" }
   | { action: "logTouch"; touch: Parameters<typeof logTouch>[1] }
   | { action: "bulkStatus"; leadIds: string[]; status: string }
-  | { action: "bulkAssign"; leadIds: string[]; memberId: string | null };
+  | { action: "bulkAssign"; leadIds: string[]; memberId: string | null }
+  | { action: "bulkVisibility"; leadIds: string[]; visible: boolean };
 
 export async function POST(request: Request) {
   const member = await getSession();
@@ -68,6 +69,20 @@ export async function POST(request: Request) {
       const { error } = await supabase
         .from("leads")
         .update({ assigned_to: body.memberId } as never)
+        .in("id", body.leadIds);
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ ok: true });
+    }
+    case "bulkVisibility": {
+      // Founder-only: blur/restrict (or restore) assignee visibility on selected leads (Section 12)
+      if (member.role !== "FOUNDER") {
+        return NextResponse.json({ error: "Founder only" }, { status: 403 });
+      }
+      const { createClient } = await import("@/lib/supabase/server");
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("leads")
+        .update({ is_visible_to_assignee: body.visible } as never)
         .in("id", body.leadIds);
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
       return NextResponse.json({ ok: true });

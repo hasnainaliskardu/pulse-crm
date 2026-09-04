@@ -1,14 +1,18 @@
 import "server-only";
 import { z } from "zod";
 import { getAdminClient } from "@/lib/supabase/admin";
+import type { Workspace } from "@/types/supabase";
 
 const createMemberSchema = z.object({
   fullName: z.string().min(2, "Name too short"),
   email: z.string().email("Invalid email"),
-  position: z.enum(["Researcher", "Sender", "Closer", "Manager"]),
+  position: z.string().min(2, "Pick a position"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   dailyResearchTarget: z.number().int().min(0).max(500).default(40),
   dailyTouchTarget: z.number().int().min(0).max(500).default(45),
+  workspaces: z.array(z.enum(["INTL", "CALLS"])).min(1).default(["INTL"]),
+  joiningDate: z.string().optional().nullable(),
+  salaryMonthly: z.number().int().min(0).default(0),
 });
 
 export type CreateMemberInput = z.infer<typeof createMemberSchema>;
@@ -18,7 +22,7 @@ export async function createMember(founderId: string, input: CreateMemberInput) 
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
-  const { email, fullName, position, password, dailyResearchTarget, dailyTouchTarget } =
+  const { email, fullName, position, password, dailyResearchTarget, dailyTouchTarget, workspaces, joiningDate, salaryMonthly } =
     parsed.data;
 
   const admin = getAdminClient();
@@ -50,6 +54,9 @@ export async function createMember(founderId: string, input: CreateMemberInput) 
     role: "MEMBER",
     daily_research_target: dailyResearchTarget,
     daily_touch_target: dailyTouchTarget,
+    workspaces,
+    joining_date: joiningDate || null,
+    salary_monthly: salaryMonthly,
   });
   if (memberError) {
     await admin.auth.admin.deleteUser(authData.user.id);
@@ -92,6 +99,9 @@ export async function updateMember(
     is_active?: boolean;
     daily_research_target?: number;
     daily_touch_target?: number;
+    workspaces?: Workspace[];
+    joining_date?: string | null;
+    salary_monthly?: number;
   }
 ) {
   const admin = getAdminClient();

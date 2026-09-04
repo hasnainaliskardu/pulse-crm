@@ -9,6 +9,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Columns3,
+  Eye,
+  EyeOff,
   Filter,
   Mail,
   Plus,
@@ -96,7 +98,14 @@ export default function LeadsWorkspace({
 
   const filtered = useMemo(() => {
     let rows = allLeads;
-    if (!isFounder) rows = rows.filter((l) => l.assigned_to === myId || l.created_by === myId);
+    if (!isFounder) {
+      // assignment-based visibility (Section 11–12): own visible leads only, never others' or unassigned
+      rows = rows.filter(
+        (l) =>
+          l.is_visible_to_assignee !== false &&
+          (l.assigned_to === myId || l.created_by === myId)
+      );
+    }
     if (filters.status) rows = rows.filter((l) => (l.status ?? "NEW") === filters.status);
     if (filters.website) rows = rows.filter((l) => (l.website_status ?? "NONE") === filters.website);
     if (filters.source) rows = rows.filter((l) => (l.source ?? "OTHER") === filters.source);
@@ -165,6 +174,21 @@ export default function LeadsWorkspace({
       void trySync("bulk-status");
     } else {
       toast.error("Bulk update failed");
+    }
+  }
+
+  async function bulkVisibility(visible: boolean) {
+    const res = await fetch("/api/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "bulkVisibility", leadIds: [...selected], visible }),
+    });
+    if (res.ok) {
+      toast.success(visible ? "Visibility restored" : `Restricted ${selected.size} leads for assignees`);
+      setSelected(new Set());
+      void trySync("bulk-visibility");
+    } else {
+      toast.error((await res.json()).error ?? "Failed");
     }
   }
 
@@ -317,6 +341,12 @@ export default function LeadsWorkspace({
           <Button size="sm" variant="secondary" onClick={() => markEmailed([...selected])}>
             Mark emailed
           </Button>
+          <Button size="sm" variant="outline" onClick={() => bulkVisibility(false)}>
+            <EyeOff className="h-4 w-4" /> Restrict for assignee
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => bulkVisibility(true)}>
+            <Eye className="h-4 w-4" /> Restore visibility
+          </Button>
           <SimpleSelect
             ariaLabel="Bulk status"
             value=""
@@ -414,11 +444,14 @@ export default function LeadsWorkspace({
                 </thead>
                 <tbody>
                   {pageRows.map((lead) => (
-                    <tr key={lead.id} className={cn("border-b last:border-0 hover:bg-muted/30", lead.dirty && "bg-accent/30")}>
+                    <tr key={lead.id} className={cn("border-b last:border-0 hover:bg-muted/30", lead.dirty && "bg-accent/30", lead.is_visible_to_assignee === false && "opacity-50")}>
                       <td className="max-w-64 px-3 py-2.5">
                         <Link href={`/leads/${lead.id}`} className="block truncate font-medium hover:text-primary">
                           {lead.business_name}
                           {lead.dirty && <span className="ml-1.5 rounded bg-warning/20 px-1 text-[9px] font-bold text-warning">PENDING</span>}
+                          {lead.is_visible_to_assignee === false && (
+                            <span className="ml-1.5 rounded bg-muted px-1 text-[9px] font-bold text-muted-foreground" title="Hidden from assignee (founder restricted)">RESTRICTED</span>
+                          )}
                         </Link>
                         <p className="truncate text-xs text-muted-foreground">{lead.city ?? "—"}{lead.state ? `, ${lead.state}` : ""}</p>
                       </td>
