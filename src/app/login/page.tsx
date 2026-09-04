@@ -21,7 +21,12 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
+      let data: { error?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = { error: "Server not configured yet — Supabase keys are missing. Ask the founder to complete setup." };
+      }
       if (!res.ok) throw new Error(data.error || "Login failed");
       router.replace("/");
       router.refresh();

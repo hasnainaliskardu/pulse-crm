@@ -3,7 +3,11 @@ import type { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 export async function middleware(request: NextRequest) {
-  const response = NextResponse.next({ request });
+  // never intercept API routes (login/logout/sync must work without session)
+  const path = request.nextUrl.pathname;
+  if (path.startsWith("/api/")) {
+    return NextResponse.next();
+  }
 
   const supabase = createClient();
 
@@ -11,7 +15,6 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const path = request.nextUrl.pathname;
   const isAuthPage = path === "/login" || path === "/auth";
 
   if (!user && !isAuthPage) {
@@ -26,11 +29,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

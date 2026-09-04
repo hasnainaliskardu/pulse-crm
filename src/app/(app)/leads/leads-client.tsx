@@ -39,8 +39,10 @@ interface Filters {
   sort: string;
 }
 
-function timeAgo(iso: string) {
+function timeAgo(iso?: string | null) {
+  if (!iso) return "—";
   const diff = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(diff)) return "—";
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
@@ -80,9 +82,9 @@ export default function LeadsWorkspace({
   const filtered = useMemo(() => {
     let rows = allLeads;
     if (!isFounder) rows = rows.filter((l) => l.assigned_to === myId || l.created_by === myId);
-    if (filters.status) rows = rows.filter((l) => l.status === filters.status);
-    if (filters.website) rows = rows.filter((l) => l.website_status === filters.website);
-    if (filters.source) rows = rows.filter((l) => l.source === filters.source);
+    if (filters.status) rows = rows.filter((l) => (l.status ?? "NEW") === filters.status);
+    if (filters.website) rows = rows.filter((l) => (l.website_status ?? "NONE") === filters.website);
+    if (filters.source) rows = rows.filter((l) => (l.source ?? "OTHER") === filters.source);
     if (filters.city) rows = rows.filter((l) => (l.city ?? "").toLowerCase().includes(filters.city.toLowerCase()));
     if (filters.assigned === "unassigned") rows = rows.filter((l) => !l.assigned_to);
     else if (filters.assigned) rows = rows.filter((l) => l.assigned_to === filters.assigned);
@@ -92,12 +94,12 @@ export default function LeadsWorkspace({
         [l.business_name, l.website_url, l.owner_phone, l.owner_name, l.owner_email].some((f) => (f ?? "").toLowerCase().includes(q))
       );
     }
-    if (filters.from) rows = rows.filter((l) => l.created_at >= `${filters.from}T00:00:00`);
-    if (filters.to) rows = rows.filter((l) => l.created_at <= `${filters.to}T23:59:59`);
+    if (filters.from) rows = rows.filter((l) => (l.created_at ?? "") >= `${filters.from}T00:00:00`);
+    if (filters.to) rows = rows.filter((l) => (l.created_at ?? "") <= `${filters.to}T23:59:59`);
     rows = [...rows].sort((a, b) =>
       filters.sort === "activity"
-        ? new Date(b.last_activity_at).getTime() - new Date(a.last_activity_at).getTime()
-        : new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        ? new Date(b.last_activity_at ?? 0).getTime() - new Date(a.last_activity_at ?? 0).getTime()
+        : new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
     );
     return rows;
   }, [allLeads, filters, isFounder, myId]);
@@ -289,7 +291,7 @@ export default function LeadsWorkspace({
         /* Kanban */
         <div className="flex gap-3 overflow-x-auto pb-4">
           {LEAD_STATUSES.map((status) => {
-            const col = filtered.filter((l) => l.status === status);
+            const col = filtered.filter((l) => (l.status ?? "NEW") === status);
             return (
               <div
                 key={status}

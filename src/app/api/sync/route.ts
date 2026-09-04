@@ -6,6 +6,11 @@ import { logActivity } from "@/lib/activity";
 
 export const dynamic = "force-dynamic";
 
+const SOURCE_SET = new Set(["GOOGLE_MAPS", "HOUZZ", "YELP", "BBB", "SUNBIZ", "PERMIT", "FACEBOOK", "INSTAGRAM", "LINKEDIN", "OTHER"]);
+const WSTATUS_SET = new Set(["NONE", "BROKEN", "POOR_SEO", "GOOD"]);
+const STATUS_SET = new Set(["NEW", "RESEARCHING", "READY", "CONTACTED", "REPLIED", "INTERESTED", "NOT_INTERESTED", "CALL_BOOKED", "PROPOSAL", "WON", "LOST", "DORMANT"]);
+const REPLY_SET = new Set(["NONE", "NEUTRAL", "POSITIVE", "NEGATIVE"]);
+
 /** Apply one outbox mutation from a client (offline replay). */
 export async function POST(request: Request) {
   const member = await getSession();
@@ -41,9 +46,21 @@ export async function POST(request: Request) {
   try {
     if (table === "leads" && op === "insert") {
       const { id: _ignored, ...row } = payload as Record<string, any>;
+      // hard defaults so imported rows can never carry null enums
+      const safe = {
+        source: "OTHER",
+        website_status: "NONE",
+        status: "NEW",
+        reply_type: "NONE",
+        ...row,
+      };
+      if (!SOURCE_SET.has(String(safe.source))) safe.source = "OTHER";
+      if (!WSTATUS_SET.has(String(safe.website_status))) safe.website_status = "NONE";
+      if (!STATUS_SET.has(String(safe.status))) safe.status = "NEW";
+      if (!REPLY_SET.has(String(safe.reply_type))) safe.reply_type = "NONE";
       const { data, error } = await supabase
         .from("leads")
-        .insert({ ...row, business_name: row.business_name ?? "Unnamed", created_by: member.id } as never)
+        .insert({ ...safe, business_name: row.business_name ?? "Unnamed", created_by: member.id } as never)
         .select()
         .single();
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });

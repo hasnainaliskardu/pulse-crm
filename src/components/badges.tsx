@@ -16,35 +16,37 @@ const statusStyles: Record<string, string> = {
   DORMANT: "bg-zinc-500/10 text-zinc-500",
 };
 
-export function StatusBadge({ status }: { status: LeadStatus }) {
+export function StatusBadge({ status }: { status?: string | null }) {
+  const s = (status ?? "NEW") as LeadStatus;
   return (
     <span
       className={cn(
         "inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-semibold",
-        statusStyles[status] ?? statusStyles.NEW
+        statusStyles[s] ?? statusStyles.NEW
       )}
     >
-      {status.replace(/_/g, " ")}
+      {s.replace(/_/g, " ")}
     </span>
   );
 }
 
-const websiteStyles: Record<WebsiteStatus, string> = {
+const websiteStyles: Record<string, string> = {
   NONE: "bg-destructive/10 text-destructive",
   BROKEN: "bg-orange-500/10 text-orange-600",
   POOR_SEO: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-500",
   GOOD: "bg-success/10 text-success",
 };
 
-export function WebsiteBadge({ status }: { status: WebsiteStatus }) {
+export function WebsiteBadge({ status }: { status?: string | null }) {
+  const s = (status ?? "NONE") as WebsiteStatus;
   return (
     <span
       className={cn(
         "inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-semibold",
-        websiteStyles[status]
+        websiteStyles[s] ?? websiteStyles.NONE
       )}
     >
-      {status.replace(/_/g, " ")}
+      {s.replace(/_/g, " ")}
     </span>
   );
 }
@@ -56,15 +58,16 @@ const replyStyles: Record<string, string> = {
   NEGATIVE: "bg-destructive/10 text-destructive",
 };
 
-export function ReplyBadge({ type }: { type: string }) {
+export function ReplyBadge({ type }: { type?: string | null }) {
+  const s = type ?? "NONE";
   return (
-    <span className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold", replyStyles[type])}>
-      {type.replace(/_/g, " ")}
+    <span className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold", replyStyles[s] ?? replyStyles.NONE)}>
+      {s.replace(/_/g, " ")}
     </span>
   );
 }
 
-const channelIcon: Record<TouchChannel, string> = {
+const channelIcon: Record<string, string> = {
   EMAIL: "✉️",
   IG_DM: "💬",
   WHATSAPP: "📱",
@@ -73,22 +76,25 @@ const channelIcon: Record<TouchChannel, string> = {
   FACEBOOK: "📘",
 };
 
-export function ChannelTag({ channel, direction }: { channel: TouchChannel; direction: "OUT" | "IN" }) {
+export function ChannelTag({ channel, direction }: { channel?: string | null; direction?: string | null }) {
+  const ch = (channel ?? "EMAIL") as TouchChannel;
+  const dir = direction === "IN" ? "IN" : "OUT";
   return (
     <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-      <span>{channelIcon[channel]}</span>
-      {channel.replace(/_/g, " ")}
-      <span className={direction === "IN" ? "text-success" : "text-muted-foreground/70"}>
-        {direction === "IN" ? "↓ in" : "↑ out"}
+      <span>{channelIcon[ch] ?? "✉️"}</span>
+      {ch.replace(/_/g, " ")}
+      <span className={dir === "IN" ? "text-success" : "text-muted-foreground/70"}>
+        {dir === "IN" ? "↓ in" : "↑ out"}
       </span>
     </span>
   );
 }
 
-export function SourceTag({ source }: { source: string }) {
+export function SourceTag({ source }: { source?: string | null }) {
+  const s = source ?? "OTHER";
   return (
     <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-      {source.replace(/_/g, " ")}
+      {s.replace(/_/g, " ")}
     </span>
   );
 }
