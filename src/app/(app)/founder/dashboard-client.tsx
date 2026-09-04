@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   Activity,
@@ -120,17 +121,72 @@ function LiveFeedRow({ icon, title, sub, time, tone }: { icon: React.ReactNode; 
   );
 }
 
-export default function FounderDashboardClient({ data }: { data: FounderData }) {
-  const [range, setRange] = useState<"t7" | "t30">("t7");
+function DateRangeBar() {
+  const router = useRouter();
+  const today = new Date().toISOString().slice(0, 10);
+  const daysAgo = (n: number) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+  const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
+
+  const go = (from: string, to: string) => router.push(`/founder?from=${from}&to=${to}`);
+  const [customFrom, setCustomFrom] = useState(daysAgo(30));
+  const [customTo, setCustomTo] = useState(today);
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {[
+        { label: "Today", from: today, to: today },
+        { label: "7d", from: daysAgo(6), to: today },
+        { label: "Month", from: monthStart, to: today },
+        { label: "Year", from: yearStart, to: today },
+      ].map((b) => (
+        <button
+          key={b.label}
+          onClick={() => go(b.from, b.to)}
+          className="h-8 rounded-lg border bg-card px-3 text-xs font-medium text-muted-foreground transition hover:border-primary/50 hover:text-primary"
+        >
+          {b.label}
+        </button>
+      ))}
+      <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} aria-label="From" className="h-8 rounded-lg border bg-card px-2 text-xs" />
+      <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} aria-label="To" className="h-8 rounded-lg border bg-card px-2 text-xs" />
+      <button
+        onClick={() => go(customFrom, customTo)}
+        className="h-8 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground"
+      >
+        Apply
+      </button>
+    </div>
+  );
+}
+
+export default function FounderDashboardClient({ data, range }: { data: FounderData; range?: { from: string; to: string } }) {
+  const [r7, setR7] = useState<"t7" | "t30">("t7");
   const [live, setLive] = useState<FounderData["recentTouches"]>(data.recentTouches);
   const [kpis, setKpis] = useState(data.kpis);
+  const router = useRouter();
 
+  // auto-refresh dashboard every 30s so it NEVER lags behind reports
+  useEffect(() => {
+    const t = setInterval(() => {
+      router.refresh();
+      fetch("/api/live/today")
+        .then((r) => r.json())
+        .then((d) => {
+          if (d?.kpis) setKpis(d.kpis);
+          if (d?.recentTouches) setLive(d.recentTouches);
+        })
+        .catch(() => {});
+    }, 30_000);
+    return () => clearInterval(t);
+  }, [router]);
+
+  // realtime: refresh on any touch insert
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
       .channel("founder-live")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "touches" }, () => {
-        // refresh feed + funnel counts via router refresh would re-run server; simple refetch of today aggregates
         fetch("/api/live/today")
           .then((r) => r.json())
           .then((d) => {
@@ -145,19 +201,18 @@ export default function FounderDashboardClient({ data }: { data: FounderData }) 
     };
   }, []);
 
-  const trend = range === "t7" ? data.trend7 : data.trend30;
+  const trend = r7 === "t7" ? data.trend7 : data.trend30;
   const f = kpis;
+  const rangeLabel = range ? `${range.from} → ${range.to}` : "Today";
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Today at a glance</p>
+          <p className="text-sm text-muted-foreground">{rangeLabel} at a glance · auto-refreshes every 30s</p>
         </div>
-        <Badge variant="info" className="gap-1.5 px-2.5 py-1">
-          <Activity className="h-3.5 w-3.5" /> Live
-        </Badge>
+        <DateRangeBar />
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -189,7 +244,7 @@ export default function FounderDashboardClient({ data }: { data: FounderData }) 
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-base">Trends</CardTitle>
-            <Tabs value={range} onValueChange={(v) => setRange(v as "t7" | "t30")}>
+            <Tabs value={r7} onValueChange={(v) => setR7(v as "t7" | "t30")}>
               <TabsList>
                 <TabsTrigger value="t7" className="text-xs">7 Days</TabsTrigger>
                 <TabsTrigger value="t30" className="text-xs">30 Days</TabsTrigger>

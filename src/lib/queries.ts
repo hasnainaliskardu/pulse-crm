@@ -16,31 +16,37 @@ function daysAgoUTC(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export async function getFounderDashboard() {
+export async function getFounderDashboard(range?: { from?: string; to?: string }) {
   const supabase = createClient();
   const today = todayUTC();
   const from30 = daysAgoUTC(29);
+  const rangeFrom = range?.from ?? today;
+  const rangeTo = range?.to ?? today;
 
-  const [members, todayStats, stats30, activeClients, todaysLeads] = await Promise.all([
+  const [members, todayStats, stats30, activeClients, todaysLeads, rangeStats, allClients] = await Promise.all([
     supabase.from("members").select("*").eq("is_active", true).order("points", { ascending: false }),
     supabase.from("daily_stats").select("*").eq("date", today),
     supabase.from("daily_stats").select("*").gte("date", from30),
     supabase.from("clients").select("*").eq("status", "ACTIVE"),
-    supabase.from("leads").select("id, status, reply_type, created_at").gte("created_at", `${today}T00:00:00.000Z`),
+    supabase.from("leads").select("id, status, reply_type, created_at").gte("created_at", `${rangeFrom}T00:00:00.000Z`).lte("created_at", `${rangeTo}T23:59:59.999Z`),
+    supabase.from("daily_stats").select("*").gte("date", rangeFrom).lte("date", rangeTo),
+    supabase.from("clients").select("*"),
   ]);
 
   const sum = (rows: DailyStat[] | null, key: keyof DailyStat) =>
     (rows ?? []).reduce((acc, r) => acc + (Number(r[key]) || 0), 0);
 
-  // funnel counts for today from stats + status-bearing leads
+  // funnel counts for the SELECTED RANGE (defaults to today) — same numbers the founder sees in reports
+  const inRange = (r: { date: string }) => r.date >= rangeFrom && r.date <= rangeTo;
+  const rangeRows = (rangeStats.data ?? []).filter(inRange);
   const leadsToday = (todaysLeads.data ?? []).length;
-  const touchesToday = sum(todayStats.data, "touches_sent");
-  const repliesToday = sum(todayStats.data, "replies_received");
-  const positivesToday = sum(todayStats.data, "positive_replies");
-  const callsToday = sum(todayStats.data, "calls_booked");
-  const winsToday = sum(todayStats.data, "clients_closed");
+  const touchesToday = rangeRows.reduce((a, r) => a + (r.touches_sent || 0), 0);
+  const repliesToday = rangeRows.reduce((a, r) => a + (r.replies_received || 0), 0);
+  const positivesToday = rangeRows.reduce((a, r) => a + (r.positive_replies || 0), 0);
+  const callsToday = rangeRows.reduce((a, r) => a + (r.calls_booked || 0), 0);
+  const winsToday = rangeRows.reduce((a, r) => a + (r.clients_closed || 0), 0);
 
-  // proposals + wins today from lead status transitions recorded in activity? Use lead status as approximation for live funnel
+  // proposals + wins in range from lead statuses
   const [leadAgg] = await Promise.all([
     supabase.from("leads").select("id, status, reply_type"),
   ]);
@@ -48,7 +54,12 @@ export async function getFounderDashboard() {
   const allLeads = (leadAgg.data ?? []) as Pick<Lead, "id" | "status" | "reply_type">[];
   const proposalsAll = allLeads.filter((l) => l.status === "PROPOSAL" || l.status === "WON").length;
 
+  // MRR: sum of ACTIVE clients (same source as Revenue page — always in sync)
   const mrr = (activeClients.data ?? []).reduce((a, c) => a + (c.monthly_revenue || 0), 0);
+  const revenueInRange = (allClients.data ?? [])
+    .filter((c) => c.started_at >= rangeFrom && c.started_at <= rangeTo)
+    .reduce((a, c) => a + (c.monthly_revenue || 0), 0);
+  void revenueInRange;
 
   // team target attainment today
   const targetTotals = (members.data ?? []).reduce(

@@ -22,7 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { StatusBadge, WebsiteBadge } from "@/components/badges";
 import { db, type CachedLead } from "@/lib/local/db";
-import { mutateLead } from "@/lib/local/sync";
+import { mutateLead, trySync } from "@/lib/local/sync";
 import { cn, LEAD_STATUSES, LEAD_SOURCES, WEBSITE_STATUSES, initials } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
@@ -37,6 +37,7 @@ interface Filters {
   from: string;
   to: string;
   sort: string;
+  emailed: string; // "" | "yes" | "no"
 }
 
 function timeAgo(iso?: string | null) {
@@ -61,11 +62,17 @@ export default function LeadsWorkspace({
   members: Array<{ id: string; full_name: string }>;
   myId: string;
 }) {
-  const [filters, setFilters] = useState<Filters>({ status: "", q: "", assigned: "", website: "", source: "", city: "", from: "", to: "", sort: "newest" });
+  const [filters, setFilters] = useState<Filters>({ status: "", q: "", assigned: "", website: "", source: "", city: "", from: "", to: "", sort: "newest", emailed: "" });
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
   const [view, setView] = useState<"table" | "kanban">("table");
   const [hydrated, setHydrated] = useState(false);
+  // bulk range selection + assignment (founder)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [rangeFrom, setRangeFrom] = useState("1");
+  const [rangeTo, setRangeTo] = useState("25");
+  const [bulkAssignee, setBulkAssignee] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   // hydrate mirror from server on first load
   useEffect(() => {
@@ -77,7 +84,14 @@ export default function LeadsWorkspace({
   }, []);
 
   const allLeads = useLiveQuery(() => db.leads.filter((l) => !l.deleted).toArray(), [], [] as CachedLead[]);
+  const allTouches = useLiveQuery(() => db.touches.toArray(), [], [] as CachedTouch[]);
   const memberMap = useMemo(() => new Map(members.map((m) => [m.id, m.full_name])), [members]);
+
+  // leads that have received an EMAIL touch
+  const emailedLeadIds = useMemo(
+    () => new Set((allTouches ?? []).filter((t) => t.channel === "EMAIL").map((t) => t.lead_id)),
+    [allTouches]
+  );
 
   const filtered = useMemo(() => {
     let rows = allLeads;
@@ -94,6 +108,8 @@ export default function LeadsWorkspace({
         [l.business_name, l.website_url, l.owner_phone, l.owner_name, l.owner_email].some((f) => (f ?? "").toLowerCase().includes(q))
       );
     }
+    if (filters.emailed === "yes") rows = rows.filter((l) => emailedLeadIds.has(l.id));
+    if (filters.emailed === "no") rows = rows.filter((l) => !emailedLeadIds.has(l.id));
     if (filters.from) rows = rows.filter((l) => (l.created_at ?? "") >= `${filters.from}T00:00:00`);
     if (filters.to) rows = rows.filter((l) => (l.created_at ?? "") <= `${filters.to}T23:59:59`);
     rows = [...rows].sort((a, b) =>
@@ -111,6 +127,44 @@ export default function LeadsWorkspace({
   function applyFilters(next: Partial<Filters>) {
     setFilters((f) => ({ ...f, ...next }));
     setPage(1);
+  }
+
+  async function bulkAssign() {
+    if (!bulkAssignee || selected.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const memberId = bulkAssignee === "unassigned" ? null : bulkAssignee;
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "bulkAssign", leadIds: [...selected], memberId }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      const name = bulkAssignee === "unassigned" ? "Unassigned" : memberMap.get(bulkAssignee);
+      toast.success(`Assigned ${selected.size} leads to ${name}`);
+      setSelected(new Set());
+      void trySync("bulk-assign");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Bulk assign failed");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function bulkStatus(status: string) {
+    if (selected.size === 0) return;
+    const res = await fetch("/api/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "bulkStatus", leadIds: [...selected], status }),
+    });
+    if (res.ok) {
+      toast.success(`Updated ${selected.size} leads → ${status.replace(/_/g, " ")}`);
+      setSelected(new Set());
+      void trySync("bulk-status");
+    } else {
+      toast.error("Bulk update failed");
+    }
   }
 
   // kanban drag (offline-first: optimistic + queued)
@@ -153,6 +207,88 @@ export default function LeadsWorkspace({
           </Button>
         </div>
       </div>
+
+      {/* Founder bulk range assignment: Select 1–25, 26–50 etc. */}
+      {isFounder && filtered.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
+          <span className="text-xs font-semibold text-muted-foreground">Bulk select:</span>
+          {[
+            { label: "All", n: filtered.length },
+            { label: "First 15", n: 15 },
+            { label: "First 20", n: 20 },
+            { label: "First 25", n: 25 },
+          ].map((b) => (
+            <Button key={b.label} size="sm" variant="outline" onClick={() => setSelected(new Set(filtered.slice(0, b.n).map((l) => l.id)))}>
+              {b.label}
+            </Button>
+          ))}
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              min={1}
+              value={rangeFrom}
+              onChange={(e) => setRangeFrom(e.target.value)}
+              className="h-8 w-16 text-xs"
+              aria-label="Range from"
+              placeholder="from"
+            />
+            <span className="text-xs text-muted-foreground">to</span>
+            <Input
+              type="number"
+              min={1}
+              value={rangeTo}
+              onChange={(e) => setRangeTo(e.target.value)}
+              className="h-8 w-16 text-xs"
+              aria-label="Range to"
+              placeholder="to"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const a = Math.max(1, Number(rangeFrom) || 1);
+                const b = Math.min(filtered.length, Number(rangeTo) || filtered.length);
+                setSelected(new Set(filtered.slice(a - 1, b).map((l) => l.id)));
+                toast.success(`Selected leads ${a}–${b}`);
+              }}
+            >
+              Select range
+            </Button>
+          </div>
+          {selected.size > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear ({selected.size})</Button>
+          )}
+        </div>
+      )}
+
+      {/* Selected actions bar */}
+      {selected.size > 0 && (
+        <div className="sticky top-16 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-primary/40 bg-accent/60 p-3 backdrop-blur">
+          <span className="text-sm font-bold">{selected.size} selected</span>
+          <SimpleSelect
+            ariaLabel="Assign selection to member"
+            value={bulkAssignee}
+            placeholder="Assign to…"
+            onChange={setBulkAssignee}
+            className="h-8 w-44 text-xs"
+            options={[
+              { label: "Unassign", value: "unassigned" },
+              ...members.map((m) => ({ label: m.full_name, value: m.id })),
+            ]}
+          />
+          <Button size="sm" disabled={!bulkAssignee || bulkBusy} onClick={bulkAssign}>
+            {bulkBusy ? "Assigning…" : "Assign"}
+          </Button>
+          <SimpleSelect
+            ariaLabel="Bulk status"
+            value=""
+            placeholder="Set status…"
+            className="h-8 w-36 text-xs"
+            onChange={(v) => v && bulkStatus(v)}
+            options={LEAD_STATUSES.map((s) => ({ label: s.replace(/_/g, " "), value: s }))}
+          />
+        </div>
+      )}
 
       {/* Search */}
       <div className="flex gap-2">
