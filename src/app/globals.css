@@ -74,6 +74,17 @@
   box-shadow: 0 1px 3px 0 hsl(24 30% 40% / 0.06), 0 4px 12px -2px hsl(24 30% 40% / 0.08);
 }
 
+/* Data security: team members cannot copy/scrape lead data */
+body[data-protect-leads] .lead-protected,
+body[data-protect-leads] .lead-protected * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+body[data-protect-leads] .lead-protected a[href^="tel:"] {
+  cursor: pointer;
+}
+
 ::-webkit-scrollbar {
   height: 8px;
   width: 8px;

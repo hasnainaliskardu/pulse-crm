@@ -104,6 +104,15 @@ export function AppShell({ member, children }: { member: Member; children: React
     return !n.founderOnly;
   });
 
+  useEffect(() => {
+    // Data security: disable text selection on lead data for non-founders (scraping deterrence)
+    if (!isFounder && typeof document !== "undefined") {
+      document.body.dataset.protectLeads = "true";
+    } else if (typeof document !== "undefined") {
+      delete document.body.dataset.protectLeads;
+    }
+  }, [isFounder]);
+
   async function signOut() {
     setSigningOut(true);
     await fetch("/api/auth/logout", { method: "POST" });

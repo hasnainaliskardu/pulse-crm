@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Columns3,
   Filter,
+  Mail,
   Plus,
   Search,
   Table2,
@@ -21,7 +22,7 @@ import { SimpleSelect } from "@/components/ui/simple-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { StatusBadge, WebsiteBadge } from "@/components/badges";
-import { db, type CachedLead } from "@/lib/local/db";
+import { db, type CachedLead, type CachedTouch } from "@/lib/local/db";
 import { mutateLead, trySync } from "@/lib/local/sync";
 import { cn, LEAD_STATUSES, LEAD_SOURCES, WEBSITE_STATUSES, initials } from "@/lib/utils";
 
@@ -167,6 +168,37 @@ export default function LeadsWorkspace({
     }
   }
 
+  /** Mark lead as emailed (creates an EMAIL touch so it counts everywhere). */
+  async function markEmailed(leadIds: string[]) {
+    const { mutateTouch } = await import("@/lib/local/sync");
+    let n = 0;
+    for (const id of leadIds) {
+      const lead = filtered.find((l) => l.id === id);
+      if (!lead || emailedLeadIds.has(id)) continue;
+      await mutateTouch({
+        lead_id: id,
+        channel: "EMAIL",
+        direction: "OUT",
+        message_summary: `Email sent to ${lead.owner_email || lead.business_name}`,
+      });
+      n++;
+    }
+    if (n) toast.success(`Marked ${n} lead${n > 1 ? "s" : ""} as emailed`);
+    else toast.info("All selected leads were already emailed");
+  }
+
+  /** Open bulk email in the user's mail client (BCC) and log the touch. */
+  function bulkEmail() {
+    const rows = filtered.filter((l) => selected.has(l.id) && l.owner_email);
+    if (rows.length === 0) {
+      toast.error("Selected leads have no email addresses");
+      return;
+    }
+    const to = rows.map((l) => l.owner_email).join(",");
+    window.location.href = `mailto:${to}?subject=${encodeURIComponent("Quick question")}`;
+    void markEmailed(rows.map((l) => l.id));
+  }
+
   // kanban drag (offline-first: optimistic + queued)
   function onDropLead(leadId: string, newStatus: string) {
     const lead = allLeads.find((l) => l.id === leadId);
@@ -279,6 +311,12 @@ export default function LeadsWorkspace({
           <Button size="sm" disabled={!bulkAssignee || bulkBusy} onClick={bulkAssign}>
             {bulkBusy ? "Assigning…" : "Assign"}
           </Button>
+          <Button size="sm" variant="outline" onClick={bulkEmail}>
+            <Mail className="h-4 w-4" /> Email selected
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => markEmailed([...selected])}>
+            Mark emailed
+          </Button>
           <SimpleSelect
             ariaLabel="Bulk status"
             value=""
@@ -321,6 +359,16 @@ export default function LeadsWorkspace({
             />
           )}
           <Input value={filters.city} onChange={(e) => applyFilters({ city: e.target.value })} placeholder="City" aria-label="City" />
+          <SimpleSelect
+            ariaLabel="Emailed filter"
+            value={filters.emailed}
+            placeholder="Emailed?"
+            onChange={(v) => applyFilters({ emailed: v })}
+            options={[
+              { label: "Emailed", value: "yes" },
+              { label: "Not emailed", value: "no" },
+            ]}
+          />
           <Input type="date" value={filters.from} onChange={(e) => applyFilters({ from: e.target.value })} aria-label="From" />
           <div className="flex gap-2">
             <Input type="date" value={filters.to} onChange={(e) => applyFilters({ to: e.target.value })} aria-label="To" />
@@ -328,7 +376,7 @@ export default function LeadsWorkspace({
               variant="ghost"
               size="icon"
               aria-label="Clear"
-              onClick={() => setFilters({ status: "", q: "", assigned: "", website: "", source: "", city: "", from: "", to: "", sort: "newest" })}
+              onClick={() => setFilters({ status: "", q: "", assigned: "", website: "", source: "", city: "", from: "", to: "", sort: "newest", emailed: "" })}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -351,13 +399,14 @@ export default function LeadsWorkspace({
       ) : view === "table" ? (
         <>
           {/* Desktop table */}
-          <div className="hidden overflow-hidden rounded-xl border bg-card md:block">
+          <div className="lead-protected hidden overflow-hidden rounded-xl border bg-card md:block">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <th className="px-3 py-2.5 font-semibold">Business</th>
                     <th className="px-3 py-2.5 font-semibold">Website</th>
+                    <th className="px-3 py-2.5 font-semibold">Emailed</th>
                     <th className="px-3 py-2.5 font-semibold">Status</th>
                     <th className="px-3 py-2.5 font-semibold">Assigned</th>
                     <th className="px-3 py-2.5 font-semibold">Activity</th>
@@ -374,6 +423,15 @@ export default function LeadsWorkspace({
                         <p className="truncate text-xs text-muted-foreground">{lead.city ?? "—"}{lead.state ? `, ${lead.state}` : ""}</p>
                       </td>
                       <td className="px-3 py-2.5"><WebsiteBadge status={lead.website_status as never} /></td>
+                      <td className="px-3 py-2.5">
+                        {emailedLeadIds.has(lead.id) ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-success">
+                            <Mail className="h-3 w-3" /> Yes
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5"><StatusBadge status={lead.status as never} /></td>
                       <td className="px-3 py-2.5">
                         {lead.assigned_to ? (
@@ -396,7 +454,7 @@ export default function LeadsWorkspace({
           </div>
 
           {/* Mobile cards */}
-          <div className="grid gap-2 md:hidden">
+          <div className="lead-protected grid gap-2 md:hidden">
             {pageRows.map((lead) => (
               <Link key={lead.id} href={`/leads/${lead.id}`} className="rounded-xl border bg-card p-3">
                 <div className="flex items-start justify-between gap-2">

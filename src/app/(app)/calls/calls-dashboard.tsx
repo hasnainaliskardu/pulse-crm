@@ -189,7 +189,7 @@ export default function CallsDashboard({
           <p className="text-sm text-muted-foreground">Founder: import leads into the Cold Calling workspace and assign them.</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="lead-protected space-y-2">
           {pageRows.map((lead, idx) => {
             const serial = (page - 1) * PAGE_SIZE + idx + 1;
             const draft = outcomeDraft[lead.id] ?? { outcome: "", note: "" };
