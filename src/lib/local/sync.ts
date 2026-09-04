@@ -159,11 +159,12 @@ async function pullChanges() {
   const cursor = (await db.meta.get("last_pull"))?.value ?? "0";
   const res = await fetch(`${SYNC_ENDPOINT}?since=${cursor}`, { cache: "no-store" });
   if (!res.ok) throw new Error("Pull failed");
-  const { leads, touches, tasks, notes, clients, members, stats, cursor: newCursor } = await res.json();
+  const { leads, touches, tasks, notes, clients, members, stats, meetings, attendance, cursor: newCursor } = await res.json();
 
   const bulk = async (table: string, rows: Array<Record<string, unknown>>) => {
     if (!rows?.length) return;
     const store = (db as unknown as Record<string, { put: (r: unknown) => Promise<unknown> }>)[table];
+    if (!store) return;
     await Promise.all(rows.map((r) => store.put(r)));
   };
   await bulk("leads", leads);
@@ -172,6 +173,8 @@ async function pullChanges() {
   await bulk("notes", notes);
   await bulk("clients", clients);
   await bulk("members", members);
+  await bulk("meetings", meetings ?? []);
+  await bulk("attendance", attendance ?? []);
   if (stats?.length) await db.stats.bulkPut(stats);
 
   await db.meta.put({ key: "last_pull", value: newCursor ?? String(Date.now()) });
@@ -256,6 +259,7 @@ export async function mutateTouch(data: {
   message_summary: string;
   message_full?: string | null;
   occurred_at?: string;
+  outcome?: string | null;
 }) {
   const id = crypto.randomUUID();
   const memberId = (await db.meta.get("user_id"))?.value ?? "";
@@ -266,6 +270,7 @@ export async function mutateTouch(data: {
     member_id: memberId,
     occurred_at: data.occurred_at ?? now,
     created_at: now,
+    outcome: data.outcome ?? null,
     dirty: true,
   } as never;
   await db.touches.put(touch);
@@ -275,6 +280,9 @@ export async function mutateTouch(data: {
     const patch: Record<string, unknown> = { last_activity_at: now, dirty: true };
     if (data.direction === "IN" && ["NEW", "RESEARCHING", "CONTACTED"].includes(lead.status)) patch.status = "REPLIED";
     if (data.direction === "OUT" && ["NEW", "RESEARCHING"].includes(lead.status)) patch.status = "CONTACTED";
+    if (data.outcome === "MEETING_BOOKED") patch.status = "CALL_BOOKED";
+    if (data.outcome === "INTERESTED") patch.status = "INTERESTED";
+    if (data.outcome === "REJECTED") patch.status = "NOT_INTERESTED";
     await db.leads.update(data.lead_id, patch as never);
     await enqueue("leads", "update", patch, { recordId: data.lead_id });
   }
@@ -282,6 +290,37 @@ export async function mutateTouch(data: {
   await trySync("touch-logged");
   listeners.onMirrorUpdate?.(["touches", "leads"]);
   return id;
+}
+
+export async function mutateMeeting(data: {
+  lead_id?: string | null;
+  title?: string;
+  scheduled_at: string;
+  notes?: string | null;
+}) {
+  const id = crypto.randomUUID();
+  const memberId = (await db.meta.get("user_id"))?.value ?? "";
+  const meeting = {
+    id,
+    lead_id: data.lead_id ?? null,
+    member_id: memberId,
+    title: data.title ?? "Meeting",
+    scheduled_at: data.scheduled_at,
+    status: "SCHEDULED",
+    notes: data.notes ?? null,
+  } as never;
+  await db.table("meetings").put(meeting);
+  await enqueue("meetings", "insert", { ...data, id }, { recordId: id });
+  await trySync("meeting-booked");
+  listeners.onMirrorUpdate?.(["meetings"]);
+  return id;
+}
+
+export async function mutateAttendance(memberId: string, date: string, status: string, note?: string) {
+  await db.table("attendance").put({ member_id: memberId, date, status, note: note ?? null });
+  await enqueue("attendance", "insert", { member_id: memberId, date, status, note: note ?? null });
+  await trySync("attendance-marked");
+  listeners.onMirrorUpdate?.(["attendance"]);
 }
 
 export async function mutateTask(data: Record<string, unknown>, op: "insert" | "update" = "insert", recordId?: string) {

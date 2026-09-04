@@ -7,7 +7,7 @@ import Dexie, { type Table } from "dexie";
 export interface OutboxItem {
   id?: number;
   queueId: string; // uuid, survives reloads
-  table: "leads" | "touches" | "tasks" | "notes" | "clients" | "custom_field_values" | "workflow_rules" | "members";
+  table: "leads" | "touches" | "tasks" | "notes" | "clients" | "custom_field_values" | "workflow_rules" | "members" | "meetings" | "attendance";
   op: "insert" | "update" | "delete";
   recordId: string | null; // server-side id (null for inserts created offline)
   payload: Record<string, unknown>;
@@ -43,6 +43,9 @@ export interface CachedLead {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  workspace?: string;
+  is_visible_to_assignee?: boolean;
+  assigned_at?: string | null;
   dirty?: boolean; // has local changes not yet confirmed by server
   deleted?: boolean;
 }
@@ -57,6 +60,7 @@ export interface CachedTouch {
   message_full: string | null;
   occurred_at: string;
   created_at: string;
+  outcome?: string | null;
   dirty?: boolean;
 }
 
@@ -137,6 +141,8 @@ export class HanaDB extends Dexie {
   outbox!: Table<OutboxItem, number>;
   drafts!: Table<Draft, string>;
   meta!: Table<{ key: string; value: string }, string>;
+  meetings!: Table<{ id: string; lead_id: string | null; member_id: string | null; title: string; scheduled_at: string; status: string; notes: string | null }, string>;
+  attendance!: Table<{ member_id: string; date: string; status: string; note: string | null }, [string, string]>;
 
   constructor() {
     super("hana-crm");
@@ -151,6 +157,17 @@ export class HanaDB extends Dexie {
       outbox: "++id, queueId, table, status, createdAt",
       drafts: "key",
       meta: "key",
+    });
+    this.version(2).stores({
+      meetings: "id, lead_id, member_id, scheduled_at, status",
+      attendance: "member_id, date",
+      leads: "id, status, assigned_to, business_name, city, last_activity_at, updated_at, dirty, workspace",
+      touches: "id, lead_id, member_id, occurred_at, outcome",
+    }).upgrade((tx) => {
+      // existing leads stay in INTL workspace by default
+      return tx.table("leads").toCollection().modify((l: CachedLead) => {
+        l.workspace = "INTL";
+      });
     });
   }
 }

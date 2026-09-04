@@ -20,6 +20,12 @@ export type TouchDirection = "OUT" | "IN";
 export type TargetPeriod = "DAILY" | "WEEKLY" | "MONTHLY";
 export type ClientStatus = "ACTIVE" | "CHURNED";
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
+export type Workspace = "INTL" | "CALLS";
+export type CallOutcome =
+  | "INTERESTED" | "REJECTED" | "NO_ANSWER" | "WRONG_NUMBER" | "SWITCHED_OFF"
+  | "WHATSAPP_REQUEST" | "MEETING_BOOKED" | "CALLBACK_LATER" | "OTHER";
+export type AttendanceStatus = "PRESENT" | "ABSENT" | "LEAVE" | "HALF_DAY";
+export type MeetingStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
 
 export type MemberRow = {
   id: string;
@@ -32,6 +38,9 @@ export type MemberRow = {
   daily_touch_target: number;
   points: number;
   created_at: string;
+  workspaces?: Workspace[];
+  joining_date?: string | null;
+  salary_monthly?: number;
 }
 export type MemberInsert = {
   id: string;
@@ -81,6 +90,9 @@ export type LeadRow = {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  workspace?: Workspace;
+  is_visible_to_assignee?: boolean;
+  assigned_at?: string | null;
 }
 export type LeadInsert = {
   id?: string;
@@ -104,6 +116,7 @@ export type LeadInsert = {
   monthly_value?: number | null;
   notes?: string | null;
   created_by?: string | null;
+  workspace?: Workspace;
 }
 export type LeadUpdate = Partial<LeadInsert>;
 
@@ -117,6 +130,7 @@ export type TouchRow = {
   message_full: string | null;
   occurred_at: string;
   created_at: string;
+  outcome?: CallOutcome | null;
 }
 export type TouchInsert = {
   id?: string;
@@ -294,6 +308,38 @@ export type SettingsRow = {
   updated_at: string;
 }
 
+export type MeetingRow = {
+  id: string;
+  lead_id: string | null;
+  member_id: string | null;
+  title: string;
+  scheduled_at: string;
+  status: MeetingStatus;
+  notes: string | null;
+  created_at: string;
+}
+
+export type AttendanceRow = {
+  id: string;
+  member_id: string;
+  date: string;
+  status: AttendanceStatus;
+  note: string | null;
+  created_at: string;
+}
+
+export type SalaryRow = {
+  id: string;
+  member_id: string;
+  month: string;
+  base_amount: number;
+  commission_amount: number;
+  paid: boolean;
+  paid_at: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
 /** Supabase-js compatible Database shape (non-circular). */
 export type Database = {
   public: {
@@ -311,6 +357,9 @@ export type Database = {
       custom_fields: { Row: CustomFieldRow; Insert: Partial<CustomFieldRow>; Update: Partial<CustomFieldRow>; Relationships: [] };
       workflow_rules: { Row: WorkflowRuleRow; Insert: Partial<WorkflowRuleRow>; Update: Partial<WorkflowRuleRow>; Relationships: [] };
       settings: { Row: SettingsRow; Insert: Partial<SettingsRow>; Update: Partial<SettingsRow>; Relationships: [] };
+      meetings: { Row: MeetingRow; Insert: Partial<MeetingRow>; Update: Partial<MeetingRow>; Relationships: [] };
+      attendance: { Row: AttendanceRow; Insert: Partial<AttendanceRow>; Update: Partial<AttendanceRow>; Relationships: [] };
+      salaries: { Row: SalaryRow; Insert: Partial<SalaryRow>; Update: Partial<SalaryRow>; Relationships: [] };
     };
     Views: {
       [_ in never]: never;

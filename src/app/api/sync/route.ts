@@ -52,6 +52,7 @@ export async function POST(request: Request) {
         website_status: "NONE",
         status: "NEW",
         reply_type: "NONE",
+        workspace: "INTL",
         ...row,
       };
       if (!SOURCE_SET.has(String(safe.source))) safe.source = "OTHER";
@@ -125,11 +126,33 @@ export async function POST(request: Request) {
       const { id: _lid, ...row } = payload as Record<string, any>;
       const { data, error } = await supabase
         .from("touches")
-        .insert({ ...row, member_id: member.id } as never)
+        .insert({ ...row, member_id: member.id, outcome: row.outcome ?? null } as never)
         .select()
         .single();
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-      await logActivity({ memberId: member.id, action: "LOG_TOUCH", entity: "TOUCH", entityId: data.id, detail: { lead_id: row.lead_id, channel: row.channel, offline: true } });
+      await logActivity({ memberId: member.id, action: "LOG_TOUCH", entity: "TOUCH", entityId: data.id, detail: { lead_id: row.lead_id, channel: row.channel, outcome: row.outcome, offline: true } });
+      return NextResponse.json({ record: data });
+    }
+
+    if (table === "meetings" && op === "insert") {
+      const { id, ...row } = payload as Record<string, any>;
+      const { data, error } = await supabase
+        .from("meetings")
+        .insert({ ...row, title: row.title ?? "Meeting", scheduled_at: row.scheduled_at ?? new Date().toISOString(), member_id: member.id } as never)
+        .select()
+        .single();
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ record: data });
+    }
+
+    if (table === "attendance" && op === "insert") {
+      const { member_id, date, status, note } = payload as Record<string, any>;
+      const { data, error } = await supabase
+        .from("attendance")
+        .upsert({ member_id, date, status, note: note ?? null } as never, { onConflict: "member_id, date" })
+        .select()
+        .single();
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 });
       return NextResponse.json({ record: data });
     }
 
@@ -203,7 +226,7 @@ export async function GET(request: Request) {
   const isFounder = member.role === "FOUNDER";
   const scope = isFounder ? {} : { assigned_to: member.id };
 
-  const [leads, touches, tasks, notes, clients, members, stats] = await Promise.all([
+  const [leads, touches, tasks, notes, clients, members, stats, meetings, attendance] = await Promise.all([
     supabase.from("leads").select("*").or(`updated_at.gte.${sinceDate},created_at.gte.${sinceDate}`).match(scope),
     supabase.from("touches").select("*").gte("created_at", sinceDate),
     supabase.from("tasks").select("*").or(`updated_at.gte.${sinceDate},created_at.gte.${sinceDate}`),
@@ -211,6 +234,8 @@ export async function GET(request: Request) {
     supabase.from("clients").select("*").gte("created_at", sinceDate),
     supabase.from("members").select("*").eq("is_active", true),
     supabase.from("daily_stats").select("*").gte("date", new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10)),
+    supabase.from("meetings").select("*").gte("scheduled_at", sinceDate),
+    supabase.from("attendance").select("*").gte("date", new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10)),
   ]);
 
   return NextResponse.json({
@@ -221,6 +246,8 @@ export async function GET(request: Request) {
     clients: clients.data ?? [],
     members: members.data ?? [],
     stats: stats.data ?? [],
+    meetings: meetings.data ?? [],
+    attendance: attendance.data ?? [],
     cursor: String(Date.now()),
   });
 }

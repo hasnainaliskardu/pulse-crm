@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  BadgeDollarSign,
   BarChart3,
   Building2,
   CalendarDays,
@@ -14,12 +15,14 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  PhoneCall,
   Plus,
   ScrollText,
   Trophy,
   Users,
   Zap,
 } from "lucide-react";
+import { MarkAttendanceButton } from "@/components/attendance-button";
 import { cn, initials, levelOf } from "@/lib/utils";
 import type { Database } from "@/types/supabase";
 import { SyncProvider } from "@/components/sync-provider";
@@ -38,7 +41,10 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/founder", label: "Dashboard", icon: LayoutDashboard, founderOnly: true, mobile: true },
   { href: "/app", label: "My Day", icon: Home, mobile: false },
-  { href: "/leads", label: "Leads", icon: Building2, mobile: true },
+  { href: "/leads", label: "Leads (Intl)", icon: Building2, mobile: true },
+  { href: "/calls", label: "Cold Calling", icon: PhoneCall, mobile: true },
+  { href: "/meetings", label: "Meetings", icon: CalendarDays, mobile: false },
+  { href: "/attendance", label: "Attendance", icon: CheckSquare, mobile: false },
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy, mobile: false },
   { href: "/tasks", label: "Tasks", icon: CheckSquare, mobile: true },
   { href: "/calendar", label: "Calendar", icon: CalendarDays, mobile: false },
@@ -46,6 +52,7 @@ const navItems: NavItem[] = [
   { href: "/team", label: "Team", icon: Users, founderOnly: true, mobile: false },
   { href: "/targets", label: "Targets", icon: Flag, founderOnly: true, mobile: false },
   { href: "/revenue", label: "Revenue", icon: DollarSign, founderOnly: true, mobile: false },
+  { href: "/money", label: "Money & Salaries", icon: BadgeDollarSign, founderOnly: true, mobile: false },
   { href: "/reports", label: "Reports", icon: BarChart3, founderOnly: true, mobile: false },
   { href: "/activity", label: "Activity Log", icon: ScrollText, founderOnly: true, mobile: false },
   { href: "/settings", label: "Settings", icon: Menu, founderOnly: true, mobile: false },
@@ -90,7 +97,12 @@ export function AppShell({ member, children }: { member: Member; children: React
         { href: "/leaderboard", label: "Ranks", icon: Trophy },
       ];
 
-  const desktopItems = navItems.filter((n) => (isFounder ? true : !n.founderOnly));
+  const desktopItems = navItems.filter((n) => {
+    if (isFounder) return true;
+    // cold-calling workspace members don't need the intl-leads add form in nav
+    if (n.href === "/leads/new") return (member.workspaces ?? ["INTL"]).includes("INTL");
+    return !n.founderOnly;
+  });
 
   async function signOut() {
     setSigningOut(true);
@@ -160,6 +172,7 @@ export function AppShell({ member, children }: { member: Member; children: React
               <span className="font-bold">HANA CRM</span>
             </div>
             <div className="flex items-center gap-2">
+              <MarkAttendanceButton memberId={member.id} compact />
               <ConnBadge />
               <span className="rounded-md bg-accent px-1.5 py-0.5 text-[10px] font-bold text-accent-foreground">
                 L{lvl.level} {lvl.name}
@@ -168,7 +181,8 @@ export function AppShell({ member, children }: { member: Member; children: React
           </header>
 
           {/* Desktop topbar */}
-          <header className="sticky top-0 z-30 hidden h-14 items-center justify-end border-b bg-card/90 px-8 backdrop-blur lg:flex">
+          <header className="sticky top-0 z-30 hidden h-14 items-center justify-end gap-3 border-b bg-card/90 px-8 backdrop-blur lg:flex">
+            <MarkAttendanceButton memberId={member.id} />
             <ConnBadge />
           </header>
 

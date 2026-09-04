@@ -98,3 +98,55 @@ export function levelOf(points: number) {
     return { level: 4, name: "Closer", next: 15000, floor: 5000 };
   return { level: 5, name: "Legend", next: 15000, floor: 15000 };
 }
+
+// ---- V2: workspaces, call outcomes, currency ----
+
+export const WORKSPACES = [
+  { value: "INTL", label: "International Outreach", short: "INTL" },
+  { value: "CALLS", label: "Cold Calling", short: "Calls" },
+] as const;
+
+export const CALL_OUTCOMES = [
+  { value: "INTERESTED", label: "Interested" },
+  { value: "REJECTED", label: "Rejected" },
+  { value: "NO_ANSWER", label: "No answer" },
+  { value: "WRONG_NUMBER", label: "Wrong number" },
+  { value: "SWITCHED_OFF", label: "Phone switched off" },
+  { value: "WHATSAPP_REQUEST", label: "Asked to contact on WhatsApp" },
+  { value: "MEETING_BOOKED", label: "Meeting booked" },
+  { value: "CALLBACK_LATER", label: "Callback later" },
+  { value: "OTHER", label: "Other response" },
+] as const;
+
+export const OUTCOME_COLORS: Record<string, string> = {
+  INTERESTED: "bg-success/10 text-success",
+  REJECTED: "bg-destructive/10 text-destructive",
+  NO_ANSWER: "bg-muted text-muted-foreground",
+  WRONG_NUMBER: "bg-destructive/10 text-destructive",
+  SWITCHED_OFF: "bg-muted text-muted-foreground",
+  WHATSAPP_REQUEST: "bg-emerald-500/10 text-emerald-600",
+  MEETING_BOOKED: "bg-primary/10 text-primary",
+  CALLBACK_LATER: "bg-amber-500/10 text-amber-600",
+  OTHER: "bg-info/10 text-info",
+};
+
+export function outcomeLabel(v?: string | null) {
+  return CALL_OUTCOMES.find((o) => o.value === v)?.label ?? v ?? "";
+}
+
+export const ATTENDANCE_STATUSES = [
+  { value: "PRESENT", label: "Present" },
+  { value: "ABSENT", label: "Absent" },
+  { value: "LEAVE", label: "Leave" },
+  { value: "HALF_DAY", label: "Half day" },
+] as const;
+
+export const TEAM_POSITIONS = [
+  "Founder", "Partner", "CRO", "COO", "HR", "Project Manager", "Sales Team", "Delivery Team",
+] as const;
+
+export function fmtMoney(usd: number, currency: "USD" | "PKR" | "USDT", rate: number) {
+  if (currency === "USD") return `$${new Intl.NumberFormat("en-US").format(usd)}`;
+  if (currency === "PKR") return `Rs ${new Intl.NumberFormat("en-US").format(Math.round(usd * rate))}`;
+  return `${(usd * rate).toFixed(2)} USDT`;
+}
